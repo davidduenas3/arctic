@@ -65,7 +65,7 @@ class PyTest(TestCommand):
 
 setup(
     name="arctic",
-    version="1.70.0",
+    version="1.74.0",
     author="Man AHL Technology",
     author_email="ManAHLTech@ahl.com",
     description=("AHL Research Versioned TimeSeries and Tick store"),
@@ -80,7 +80,8 @@ setup(
                     "setuptools-git",
                    ],
     install_requires=["decorator",
-                      "enum34",
+                      "enum-compat",
+                      "futures; python_version == '2.7'",
                       "mockextras",
                       "pandas",
                       "pymongo>=3.6.0",

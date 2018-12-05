@@ -76,6 +76,15 @@ def _mixed_test_data():
              },
             index=(0, 1))
 
+        # With mixed types (i.e. string / numbers) in multi-index
+        input_dict = {'POSITION': {
+            (pd.Timestamp('2013-10-07 15:45:43'), 'MYSTRT', 'SYMA', 'XX', 0): 0.0,
+            (pd.Timestamp('2013-10-07 15:45:43'), 'MYSTRT', 'SYMA', 'FFL', '201312'): -558.0,
+            (pd.Timestamp('2013-10-07 15:45:43'), 'MYSTRT', 'AG', 'FFL', '201312'): -74.0,
+            (pd.Timestamp('2013-10-07 15:45:43'), 'MYSTRT', 'AG', 'XX', 0): 0.0}
+        }
+        multi_index_with_object = pd.DataFrame.from_dict(input_dict)
+
         # Exhaust all dtypes
         mixed_dtypes_df = pd.DataFrame({
             'string': list('abc'),
@@ -92,29 +101,73 @@ def _mixed_test_data():
         })
         mixed_dtypes_df['timedeltas'] = mixed_dtypes_df.dates.diff()
 
+        # Multi-column with some objects
+        multi_column_with_some_objects = multi_column_no_multiindex.copy()
+        multi_column_with_some_objects.iloc[1:, 1:2] = 'Convert this columnt dtype to object'
+
+        # Index with timezone-aware datetime
+        index_tz_aware = pd.DataFrame(data={'colA': range(10),
+                                            'colB': pd.date_range('20130101', periods=10, tz='US/Eastern')},
+                                      index=pd.date_range('20130101', periods=10, tz='US/Eastern'))
+        index_tz_aware.index.name = 'index'
+
         _TEST_DATA = {
-            'onerow': (onerow_ts, df_serializer.serialize(onerow_ts)),
-            'small': (small_ts, df_serializer.serialize(small_ts)),
-            'medium': (medium_ts, df_serializer.serialize(medium_ts)),
-            'large': (large_ts, df_serializer.serialize(large_ts)),
-            'empty': (empty_ts, df_serializer.serialize(empty_ts)),
-            'empty_index': (empty_index, df_serializer.serialize(empty_index)),
-            'with_some_objects': (with_some_objects_ts, df_serializer.serialize(with_some_objects_ts)),
-            'large_with_some_objects': (large_with_some_objects, df_serializer.serialize(large_with_some_objects)),
-            'with_string': (with_string_ts, df_serializer.serialize(with_string_ts)),
-            'with_unicode': (with_unicode_ts, df_serializer.serialize(with_unicode_ts)),
-            'with_some_none': (with_some_none_ts, df_serializer.serialize(with_some_none_ts)),
-            'multiindex': (multiindex_ts, df_serializer.serialize(multiindex_ts)),
-            'empty_multiindex': (empty_multiindex_ts, df_serializer.serialize(empty_multiindex_ts)),
-            'large_multi_index': (large_multi_index, df_serializer.serialize(large_multi_index)),
-            'empty_multicolumn': (empty_multi_column_ts, df_serializer.serialize(empty_multi_column_ts)),
-            'multi_column_no_multiindex': (multi_column_no_multiindex,
-                                           df_serializer.serialize(multi_column_no_multiindex)),
-            'large_multi_column': (large_multi_column, df_serializer.serialize(large_multi_column)),
-            'multi_column_int_levels': (multi_column_int_levels, df_serializer.serialize(multi_column_int_levels)),
-            'multi_column_and_multi_index': (multi_column_and_multi_index,
-                                             df_serializer.serialize(multi_column_and_multi_index)),
-            'n_dimensional_df': (n_dimensional_df, Exception),
-            'mixed_dtypes_df': (mixed_dtypes_df, df_serializer.serialize(mixed_dtypes_df))
+            'onerow': (onerow_ts, df_serializer.serialize(onerow_ts),
+                       df_serializer.can_convert_to_records_without_objects(small_ts, 'symA')),
+            'small': (small_ts, df_serializer.serialize(small_ts),
+                      df_serializer.can_convert_to_records_without_objects(small_ts, 'symA')),
+            'medium': (medium_ts, df_serializer.serialize(medium_ts),
+                       df_serializer.can_convert_to_records_without_objects(medium_ts, 'symA')),
+            'large': (large_ts, df_serializer.serialize(large_ts),
+                      df_serializer.can_convert_to_records_without_objects(large_ts, 'symA')),
+            'empty': (empty_ts, df_serializer.serialize(empty_ts),
+                      df_serializer.can_convert_to_records_without_objects(empty_ts, 'symA')),
+            'empty_index': (empty_index, df_serializer.serialize(empty_index),
+                            df_serializer.can_convert_to_records_without_objects(empty_index, 'symA')),
+            'with_some_objects': (with_some_objects_ts, df_serializer.serialize(with_some_objects_ts),
+                                  df_serializer.can_convert_to_records_without_objects(with_some_objects_ts, 'symA')),
+            'large_with_some_objects': (
+                large_with_some_objects, df_serializer.serialize(large_with_some_objects),
+                df_serializer.can_convert_to_records_without_objects(large_with_some_objects, 'symA')),
+            'with_string': (with_string_ts, df_serializer.serialize(with_string_ts),
+                            df_serializer.can_convert_to_records_without_objects(with_string_ts, 'symA')),
+            'with_unicode': (with_unicode_ts, df_serializer.serialize(with_unicode_ts),
+                             df_serializer.can_convert_to_records_without_objects(with_unicode_ts, 'symA')),
+            'with_some_none': (with_some_none_ts, df_serializer.serialize(with_some_none_ts),
+                               df_serializer.can_convert_to_records_without_objects(with_some_none_ts, 'symA')),
+            'multiindex': (multiindex_ts, df_serializer.serialize(multiindex_ts),
+                           df_serializer.can_convert_to_records_without_objects(multiindex_ts, 'symA')),
+            'multiindex_with_object': (
+                multi_index_with_object, df_serializer.serialize(multi_index_with_object),
+                df_serializer.can_convert_to_records_without_objects(multi_index_with_object, 'symA')),
+            'empty_multiindex': (empty_multiindex_ts, df_serializer.serialize(empty_multiindex_ts),
+                                 df_serializer.can_convert_to_records_without_objects(empty_multiindex_ts, 'symA')),
+            'large_multi_index': (large_multi_index, df_serializer.serialize(large_multi_index),
+                                  df_serializer.can_convert_to_records_without_objects(large_multi_index, 'symA')),
+            'empty_multicolumn': (empty_multi_column_ts, df_serializer.serialize(empty_multi_column_ts),
+                                  df_serializer.can_convert_to_records_without_objects(empty_multi_column_ts, 'symA')),
+            'multi_column_no_multiindex': (
+                multi_column_no_multiindex, df_serializer.serialize(multi_column_no_multiindex),
+                df_serializer.can_convert_to_records_without_objects(multi_column_no_multiindex, 'symA')),
+            'large_multi_column': (large_multi_column, df_serializer.serialize(large_multi_column),
+                                   df_serializer.can_convert_to_records_without_objects(large_multi_column, 'symA')),
+            'multi_column_int_levels': (
+                multi_column_int_levels, df_serializer.serialize(multi_column_int_levels),
+                df_serializer.can_convert_to_records_without_objects(multi_column_int_levels, 'symA')),
+            'multi_column_and_multi_index': (
+                multi_column_and_multi_index, df_serializer.serialize(multi_column_and_multi_index),
+                df_serializer.can_convert_to_records_without_objects(multi_column_and_multi_index, 'symA')),
+            'multi_column_with_some_objects': (
+                multi_column_with_some_objects, df_serializer.serialize(multi_column_with_some_objects),
+                df_serializer.can_convert_to_records_without_objects(multi_column_with_some_objects, 'symA')),
+            'n_dimensional_df': (n_dimensional_df, Exception, None),
+            'mixed_dtypes_df': (mixed_dtypes_df, df_serializer.serialize(mixed_dtypes_df),
+                                df_serializer.can_convert_to_records_without_objects(mixed_dtypes_df, 'symA')),
+            'index_tz_aware': (index_tz_aware, df_serializer.serialize(index_tz_aware),
+                               df_serializer.can_convert_to_records_without_objects(index_tz_aware, 'symA'))
         }
     return _TEST_DATA
+
+
+def is_test_data_serializable(input_df_descr):
+    return _mixed_test_data()[input_df_descr][2]

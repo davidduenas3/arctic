@@ -1,6 +1,19 @@
 ## Changelog
 
-### 1.70
+### 1.73 
+  * Bugfix: #658 Write/append errors for Panel objects from older pandas versions
+  * Feature: #653 Add version meta-info in arctic module
+  * Feature: #663 Include arctic numerical version in the metadata of the version document
+  * Feature: #650 Implemented forward pointers for chunks in VersionStore (modes: enabled/disabled/hybrid)
+
+### 1.72 (2018-11-06)
+  * Feature: #577 Added implementation for incremental serializer for numpy records
+  * Bugfix: #648 Fix issue with Timezone aware Pandas types, which don't contain hasobject attribute
+
+### 1.71  (2018-11-05)
+  * Bugfix: #645 Fix write errors for Pandas DataFrame that has mixed object/string types in multi-index column
+
+### 1.70 (2018-10-30)
   * Bugfix: #157 Assure that serialized dataframes remain value-equivalent (e.g. avoid NaN --> 'nan' in mixed string columns)
   * Bugfix: #608 Ensure Arctic performs well with MongoDB 3.6 (sorting)
   * Bugfix: #629 Column kwarg no longer modified
