@@ -17,21 +17,14 @@
 # USA
 
 import logging
-from setuptools import setup
-from setuptools import find_packages
-from setuptools.command.test import test as TestCommand
 import sys
 
+from setuptools import find_packages
+from setuptools import setup
+from setuptools.command.test import test as TestCommand
 
-# Convert Markdown to RST for PyPI
-# http://stackoverflow.com/a/26737672
-try:
-    import pypandoc
-    long_description = pypandoc.convert('README.md', 'rst')
-    changelog = pypandoc.convert('CHANGES.md', 'rst')
-except (IOError, ImportError, OSError):
-    long_description = open('README.md').read()
-    changelog = open('CHANGES.md').read()
+long_description = open('README.md').read()
+changelog = open('CHANGES.md').read()
 
 
 class PyTest(TestCommand):
@@ -65,7 +58,7 @@ class PyTest(TestCommand):
 
 setup(
     name="arctic",
-    version="1.74.0",
+    version="1.79.2",
     author="Man AHL Technology",
     author_email="ManAHLTech@ahl.com",
     description=("AHL Research Versioned TimeSeries and Tick store"),
@@ -74,6 +67,7 @@ setup(
     url="https://github.com/manahl/arctic",
     packages=find_packages(exclude=['tests', 'tests.*', 'benchmarks']),
     long_description='\n'.join((long_description, changelog)),
+    long_description_content_type="text/markdown",
     cmdclass={'test': PyTest},
     setup_requires=["six",
                     "numpy",
@@ -90,13 +84,14 @@ setup(
                       "tzlocal",
                       "lz4"
                      ],
+    # Note: pytest >= 4.1.0 is not compatible with pytest-cov < 2.6.1.
     tests_require=["mock",
                    "mockextras",
                    "pytest",
                    "pytest-cov",
                    "pytest-server-fixtures",
                    "pytest-timeout",
-                   "pytest-xdist",
+                   "pytest-xdist<=1.26.1",
                    "lz4"
                   ],
     entry_points={'console_scripts': [

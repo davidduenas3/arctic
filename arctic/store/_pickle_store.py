@@ -1,16 +1,16 @@
-import bson
+import io
 import logging
+from operator import itemgetter
+
+import bson
+import six
 from bson.binary import Binary
 from bson.errors import InvalidDocument
-from operator import itemgetter
 from six.moves import cPickle, xrange
-import io
-from .._compression import decompress, compress_array
-import pymongo
 
 from ._version_store_utils import checksum, pickle_compat_load, version_base_or_id
+from .._compression import decompress, compress_array
 from ..exceptions import UnsupportedPickleStoreVersion
-
 
 # new versions of chunked pickled objects MUST begin with __chunked__
 _MAGIC_CHUNKED = '__chunked__'
@@ -27,11 +27,11 @@ class PickleStore(object):
     def initialize_library(cls, *args, **kwargs):
         pass
 
-    def get_info(self, version):
-        ret = {}
-        ret['type'] = 'blob'
-        ret['handler'] = self.__class__.__name__
-        return ret
+    def get_info(self, _version):
+        return {
+            'type': 'blob',
+            'handler': self.__class__.__name__,
+        }
 
     def read(self, mongoose_lib, version, symbol, **kwargs):
         blob = version.get("blob")
@@ -55,7 +55,20 @@ class PickleStore(object):
                     data = decompress(blob)
                 except:
                     logger.error("Failed to read symbol %s" % symbol)
-            return pickle_compat_load(io.BytesIO(data))
+
+            if six.PY2:
+                # Providing encoding is not possible on PY2
+                return pickle_compat_load(io.BytesIO(data))
+            else:
+                try:
+                    # The default encoding is ascii.
+                    return pickle_compat_load(io.BytesIO(data))
+                except UnicodeDecodeError as ue:
+                    # Using encoding='latin1' is required for unpickling NumPy arrays and instances of datetime, date
+                    # and time pickled by Python 2: https://docs.python.org/3/library/pickle.html#pickle.load
+                    logger.info("Could not Unpickle with ascii, Using latin1.")
+                    encoding = kwargs.get('encoding', 'latin_1')  # Check if someone has manually specified encoding.
+                    return pickle_compat_load(io.BytesIO(data), encoding=encoding)
         return version['data']
 
     @staticmethod

@@ -1,6 +1,38 @@
 ## Changelog
 
-### 1.73 
+### 1.79.2 (2019-05-21)
+  * Feature: Allow list_library caching to be tunable via a settings collection.
+  * Bugfix: #777: Handle empty columns in dataframes
+
+### 1.79.1 (2019-05-03)
+  * Bugfix: Pandas convert multiindexes to unicode if flag set.
+
+### 1.79 (2019-05-02)
+  * Bugfix: #765 Pandas data columns require encoding to convert to unicode.
+
+### 1.78 (2019-05-02)
+  * Bugfix: Use the default encoding (ascii) instead of bytes for unpickling.
+
+### 1.77 (2019-05-01)
+  * Bugfix: pypandoc not rendering README correctly for PYPI
+  * Bugfix: #744 get_info on an empty dataframe raises an exception
+  * Bugfix: #751 Handle unpickling py2 datetime and other object types with latin1
+  * Bugfix: #598 Add an option to convert py2 str to py3 str (unicode type) on read.
+
+### 1.74 (2019-02-28)
+  * Bugfix: #712 Pandas deprecation warning in chunkstore serializer
+  * BugFix: #670 Lots of pycodestyle fixes
+  * BugFix: #691 Fix arrays_to_mgr for pandas 0.23.4+
+  * BugFix: #698 Fix no handler in logging warning
+  * BugFix: #705 Use sort_index instead of sortlevel_
+  * BugFix: #710: Initialize SEGMENT_SHA in versions for writes and appends
+  * Feature: #669 Experimental initial implementation of async arctic
+  * Feature: #704 Do not enable sharding by default in BSONStore.
+  * Feature: #688 Remove Chunkstore check for issue #422
+  * Feature: #717 Add a best effort cache for list_libraries
+  * Bugfix: #722 Exception while reading a column from chunkstore with a column missing in the chunk
+
+### 1.73 (2018-11-27)
   * Bugfix: #658 Write/append errors for Panel objects from older pandas versions
   * Feature: #653 Add version meta-info in arctic module
   * Feature: #663 Include arctic numerical version in the metadata of the version document

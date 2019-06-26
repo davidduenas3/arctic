@@ -1,9 +1,8 @@
 import logging
 import os
-from enum import Enum
 
 import pymongo
-
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +43,7 @@ class FwPointersCfg(Enum):
     DISABLED = 1  # operate in legacy mode, update segment parent references, don't add forward pointers
     HYBRID = 2    # maintain both forward pointers and parent references in segments; for reads prefer fw pointers
 
+
 # The version document key used to store the ObjectIDs of segments
 FW_POINTERS_REFS_KEY = 'SEGMENT_SHAS'
 
@@ -81,7 +81,7 @@ LZ4_WORKERS = os.environ.get('LZ4_WORKERS', 2)
 LZ4_N_PARALLEL = os.environ.get('LZ4_N_PARALLEL', 16)
 
 # Minimum data size to use parallel compression
-LZ4_MINSZ_PARALLEL = os.environ.get('LZ4_MINSZ_PARALLEL', 0.5*1024**2)  # 0.5 MB
+LZ4_MINSZ_PARALLEL = os.environ.get('LZ4_MINSZ_PARALLEL', 0.5 * 1024 ** 2)  # 0.5 MB
 
 # Enable this when you run the benchmark_lz4.py
 BENCHMARK_MODE = False
@@ -92,3 +92,14 @@ BENCHMARK_MODE = False
 # ---------------------------
 # Configures the size of the workers pools used for async arctic requests
 ARCTIC_ASYNC_NWORKERS = os.environ.get('ARCTIC_ASYNC_NWORKERS', 4)
+
+
+# -------------------------------
+# Flag used to convert byte column/index/column names to unicode when read back.
+# -------------------------------
+FORCE_BYTES_TO_UNICODE = bool(os.environ.get('FORCE_BYTES_TO_UNICODE'))
+
+# -------------------------------
+# Flag used for indicating caching levels. For now just for list_libraries.
+# -------------------------------
+ENABLE_CACHE = not bool(os.environ.get('ARCTIC_DISABLE_CACHE'))

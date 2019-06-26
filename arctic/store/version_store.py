@@ -1,5 +1,5 @@
-from datetime import datetime as dt, timedelta
 import logging
+from datetime import datetime as dt, timedelta
 
 import bson
 import pymongo
@@ -7,17 +7,16 @@ import six
 from pymongo import ReadPreference
 from pymongo.errors import OperationFailure, AutoReconnect, DuplicateKeyError
 
+from ._pickle_store import PickleStore
+from ._version_store_utils import cleanup, get_symbol_alive_shas, _get_symbol_pointer_cfgs
+from .versioned_item import VersionedItem
 from .._config import STRICT_WRITE_HANDLER_MATCH, FW_POINTERS_REFS_KEY, FW_POINTERS_CONFIG_KEY, FwPointersCfg
+from .._util import indent, enable_sharding, mongo_count, get_fwptr_config
 from ..date import mktz, datetime_to_ms, ms_to_datetime
 from ..decorators import mongo_retry
 from ..exceptions import NoDataFoundException, DuplicateSnapshotException, \
     ArcticException
 from ..hooks import log_exception
-from ._pickle_store import PickleStore
-from .._util import indent, enable_sharding, mongo_count, get_fwptr_config
-from ._version_store_utils import cleanup, get_symbol_alive_shas, _get_symbol_pointer_cfgs
-from .versioned_item import VersionedItem
-
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +49,6 @@ class VersionStore(object):
     @classmethod
     def initialize_library(cls, arctic_lib, hashed=True, **kwargs):
         c = arctic_lib.get_top_level_collection()
-
-        if '%s.changes' % c.name not in mongo_retry(c.database.list_collection_names)():
-            # 32MB buffer for change notifications
-            mongo_retry(c.database.create_collection)('%s.changes' % c.name, capped=True, size=32 * 1024 * 1024)
 
         if 'strict_write_handler' in kwargs:
             arctic_lib.set_library_metadata('STRICT_WRITE_HANDLER_MATCH',
@@ -110,9 +105,6 @@ class VersionStore(object):
         self._snapshots = self._collection.snapshots
         self._versions = self._collection.versions
         self._version_nums = self._collection.version_nums
-        self._publish_changes = '%s.changes' % self._collection.name in self._collection.database.list_collection_names()
-        if self._publish_changes:
-            self._changes = self._collection.changes
 
     def __getstate__(self):
         return {'arctic_lib': self._arctic_lib}
@@ -612,8 +604,6 @@ class VersionStore(object):
         else:
             raise Exception("Append not implemented for handler %s" % handler)
 
-        self._publish_change(symbol, version)
-
         if prune_previous_version and previous_version:
             # Does not allow prune to remove the base of the new version
             self._prune_previous_versions(symbol, keep_version=version.get('base_version_id'),
@@ -626,10 +616,6 @@ class VersionStore(object):
         return VersionedItem(symbol=symbol, library=self._arctic_lib.get_name(), version=version['version'],
                              metadata=version.pop('metadata', None), data=None,
                              host=self._arctic_lib.arctic.mongo_host)
-
-    def _publish_change(self, symbol, version):
-        if self._publish_changes:
-            mongo_retry(self._changes.insert_one)(version)
 
     @mongo_retry
     def write(self, symbol, data, metadata=None, prune_previous_version=True, **kwargs):
@@ -674,8 +660,6 @@ class VersionStore(object):
         if prune_previous_version and previous_version:
             self._prune_previous_versions(symbol, new_version_shas=version.get(FW_POINTERS_REFS_KEY))
 
-        self._publish_change(symbol, version)
-
         # Insert the new version into the version DB
         self._insert_version(version)
 
@@ -690,10 +674,10 @@ class VersionStore(object):
         # It is dangerous because if it deletes the version at the last_look, the segments added by the
         # append are dangling (if prune_previous_version is False) and can cause potentially corruption.
         constraints = new_version and \
-                            reference_version and \
-                            new_version['symbol'] == reference_version['symbol'] and \
-                            new_version['_id'] != reference_version['_id'] and \
-                            new_version['base_version_id']
+                      reference_version and \
+                      new_version['symbol'] == reference_version['symbol'] and \
+                      new_version['_id'] != reference_version['_id'] and \
+                      new_version['base_version_id']
         assert constraints
         # There is always a small risk here another process in between these two calls (above/below)
         # to delete the reference_version, which may happen to be the last parent entry in the data segments.
@@ -704,7 +688,7 @@ class VersionStore(object):
         if lastv_seqn != new_version['version']:
             raise OperationFailure("The symbol {} has been modified concurrently ({} != {})".format(
                 symbol, lastv_seqn, new_version['version']))
-        
+
         # Insert the new version into the version DB
         # (must come before the pruning, otherwise base version won't be preserved)
         self._insert_version(new_version)
@@ -723,8 +707,6 @@ class VersionStore(object):
             self._prune_previous_versions(symbol, new_version_shas=new_version.get(FW_POINTERS_REFS_KEY))
 
         logger.debug('Finished updating versions with new metadata for %s', symbol)
-
-        self._publish_change(symbol, new_version)
 
         return VersionedItem(symbol=symbol, library=self._arctic_lib.get_name(), version=new_version['version'],
                              metadata=new_version.get('metadata'), data=None,

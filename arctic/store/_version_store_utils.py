@@ -2,11 +2,11 @@ import functools
 import hashlib
 import logging
 import pickle
-import six
 
 import numpy as np
 import pandas as pd
 import pymongo
+import six
 from bson import Binary
 from pandas.compat import pickle_compat
 from pymongo.errors import OperationFailure
@@ -80,7 +80,7 @@ def _cleanup_parent_pointers(collection, symbol, version_ids):
 
     # Now remove all chunks which aren't parented - this is unlikely, as they will
     # have been removed by the above
-    collection.delete_one({'symbol':  symbol, 'parent': []})
+    collection.delete_one({'symbol': symbol, 'parent': []})
 
 
 def _cleanup_mixed(symbol, collection, version_ids, versions_coll):
@@ -228,7 +228,7 @@ def analyze_symbol(l, sym, from_ver, to_ver, do_reads=False):
                 delta_snap_creation,
                 'PREV_MISSING' if prev_n < n - 1 else '',
                 'CORRUPTED VERSION' if corrupted else '')
-            )
+        )
         prev_rows = v.get('up_to', 0)
         prev_n = n
         prev_v = v
@@ -247,7 +247,7 @@ def _fast_check_corruption(collection, sym, v, check_count, check_last_segment, 
     if v is None:
         logging.warning("Symbol {} with version {} not found, so can't be corrupted.".format(sym, v))
         return False
-    
+
     if not check_count and not check_last_segment:
         raise ValueError("_fast_check_corruption must be called with either of "
                          "check_count and check_last_segment set to True")
@@ -255,7 +255,7 @@ def _fast_check_corruption(collection, sym, v, check_count, check_last_segment, 
     # If version marked symbol as deleted, it will force writes/appends to start from a new base: non corrupted.
     if isinstance(v.get('metadata'), dict) and v['metadata'].get('deleted'):
         return False
-     
+
     if check_append_safe:
         # Check whether appending to the symbol version can potentially corrupt the data (history branch).
         # Inspect all segments, don't limit to v['up_to']. No newer append segments after v should exist.
@@ -280,7 +280,7 @@ def _fast_check_corruption(collection, sym, v, check_count, check_last_segment, 
             # Quick check: Segment counts agree and size is zero
             if total_segments == 0:
                 return False
-        
+
         if check_last_segment:
             # Quick check: compare the maximum segment's up_to number. It has to verify the version's up_to.
             max_seg = collection.find_one(spec, {'segment': 1}, sort=[('segment', pymongo.DESCENDING)])
@@ -371,9 +371,6 @@ def is_corrupted(l, sym, input_v):
         except Exception:
             pass
     return True
-
-
-
 
 
 # Initialise the pickle load function and delete the factory function.

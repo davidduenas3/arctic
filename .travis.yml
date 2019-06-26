@@ -8,6 +8,8 @@ python:
 services:
    - mongodb
 
+before_install:
+  - pip install pycodestyle
 install:
   - mongo --version
   - pip install --upgrade pip
@@ -28,6 +30,9 @@ install:
   - pip install pytest-timeout --upgrade
   - pip install pytest-xdist --upgrade
   - pip install setuptools-git --upgrade
+  - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then pip install pandas==0.22.0; fi
 script:
   - pip freeze
   - python setup.py test --pytest-args=-v
+  # Skipped codes in setup.cfg. Tests not checked for now.
+  - pycodestyle arctic

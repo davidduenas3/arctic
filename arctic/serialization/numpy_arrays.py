@@ -1,7 +1,12 @@
 import logging
+
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
+from bson import Binary, SON
+
+from .._compression import compress, decompress, compress_array
+from ._serializer import Serializer
 
 try:
     from pandas.api.types import infer_dtype
@@ -19,11 +24,9 @@ except ImportError:
         # pandas <=  0.19.x
         from pandas.lib import max_len_string_array
 
-from bson import Binary, SON
-
-from .._compression import compress, decompress, compress_array
-from ._serializer import Serializer
-
+if int(pd.__version__.split('.')[1]) > 22:
+    from functools import partial
+    pd.concat = partial(pd.concat, sort=False)
 
 
 DATA = 'd'
@@ -74,7 +77,7 @@ class FrameConverter(object):
         else:
             mask = None
 
-        if infer_dtype(a) == 'mixed':
+        if infer_dtype(a, skipna=False) == 'mixed':
             # assume its a string, otherwise raise an error
             try:
                 a = np.array([s.encode('ascii') for s in a])
@@ -82,7 +85,7 @@ class FrameConverter(object):
             except:
                 raise ValueError("Column of type 'mixed' cannot be converted to string")
 
-        type_ = infer_dtype(a)
+        type_ = infer_dtype(a, skipna=False)
         if type_ in ['unicode', 'string']:
             max_len = max_len_string_array(a)
             return a.astype('U{:d}'.format(max_len)), mask
@@ -115,9 +118,9 @@ class FrameConverter(object):
                     masks[str(c)] = Binary(compress(mask.tostring()))
                 arrays.append(arr.tostring())
             except Exception as e:
-                typ = infer_dtype(df[c])
+                typ = infer_dtype(df[c], skipna=False)
                 msg = "Column '{}' type is {}".format(str(c), typ)
-                logging.info(msg)
+                logging.warning(msg)
                 raise e
 
         arrays = compress_array(arrays)
@@ -144,14 +147,19 @@ class FrameConverter(object):
         data = {}
 
         for col in cols:
-            d = decompress(doc[DATA][doc[METADATA][LENGTHS][col][0]: doc[METADATA][LENGTHS][col][1] + 1])
-            # d is ready-only but that's not an issue since DataFrame will copy the data anyway.
-            d = np.frombuffer(d, doc[METADATA][DTYPE][col])
+            # if there is missing data in a chunk, we can default to NaN
+            # and pandas will autofill the missing values to the correct length
+            if col not in doc[METADATA][LENGTHS]:
+                d = [np.nan]
+            else:
+                d = decompress(doc[DATA][doc[METADATA][LENGTHS][col][0]: doc[METADATA][LENGTHS][col][1] + 1])
+                # d is ready-only but that's not an issue since DataFrame will copy the data anyway.
+                d = np.frombuffer(d, doc[METADATA][DTYPE][col])
 
-            if MASK in doc[METADATA] and col in doc[METADATA][MASK]:
-                mask_data = decompress(doc[METADATA][MASK][col])
-                mask = np.frombuffer(mask_data, 'bool')
-                d = ma.masked_array(d, mask)
+                if MASK in doc[METADATA] and col in doc[METADATA][MASK]:
+                    mask_data = decompress(doc[METADATA][MASK][col])
+                    mask = np.frombuffer(mask_data, 'bool')
+                    d = ma.masked_array(d, mask)
             data[col] = d
 
         # Copy into
@@ -186,7 +194,7 @@ class FrametoArraySerializer(Serializer):
         return ret
 
     def deserialize(self, data, columns=None):
-        '''
+        """
         Deserializes SON to a DataFrame
 
         Parameters
@@ -199,8 +207,8 @@ class FrametoArraySerializer(Serializer):
         Returns
         -------
         pandas dataframe or series
-        '''
-        if data == []:
+        """
+        if not data:
             return pd.DataFrame()
 
         meta = data[0][METADATA] if isinstance(data, list) else data[METADATA]
@@ -208,7 +216,7 @@ class FrametoArraySerializer(Serializer):
 
         if columns:
             if index:
-                columns = list(columns)
+                columns = columns[:]
                 columns.extend(meta[INDEX])
             if len(columns) > len(set(columns)):
                 raise Exception("Duplicate columns specified, cannot de-serialize")

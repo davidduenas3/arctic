@@ -1,11 +1,13 @@
 import logging
-import os
 
 import numpy as np
 from pandas import DataFrame, MultiIndex, Series, DatetimeIndex, Index
+
+# Used in global scope, do not remove.
 from .._config import FAST_CHECK_DF_SERIALIZABLE
-from ..exceptions import ArcticException
 from .._util import NP_OBJECT_DTYPE
+from ..exceptions import ArcticException
+
 try:  # 0.21+ Compatibility
     from pandas._libs.tslib import Timestamp
     from pandas._libs.tslibs.timezones import get_timezone
@@ -19,7 +21,6 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 DTN64_DTYPE = 'datetime64[ns]'
-
 
 
 def set_fast_check_df_serializable(config):
@@ -188,7 +189,7 @@ class PandasSerializer(object):
     def can_convert_to_records_without_objects(self, df, symbol):
         # We can't easily distinguish string columns from objects
         try:
-            #TODO: we can add here instead a check based on df size and enable fast-check if sz > threshold value
+            # TODO: we can add here instead a check based on df size and enable fast-check if sz > threshold value
             if FAST_CHECK_DF_SERIALIZABLE:
                 arr, _ = self.fast_check_serializable(df)
             else:
@@ -212,7 +213,7 @@ class PandasSerializer(object):
     def serialize(self, item, string_max_len=None, forced_dtype=None):
         raise NotImplementedError
 
-    def deserialize(self, item):
+    def deserialize(self, item, force_bytes_to_unicode=False):
         raise NotImplementedError
 
 
@@ -226,7 +227,7 @@ class SeriesSerializer(PandasSerializer):
         column_vals = [s.values]
         return columns, column_vals, None
 
-    def deserialize(self, item):
+    def deserialize(self, item, _force_bytes_to_unicode=False):
         index = self._index_from_records(item)
         name = item.dtype.names[-1]
         return Series.from_array(item[name], index=index, name=name)
@@ -254,7 +255,7 @@ class DataFrameSerializer(PandasSerializer):
         else:
             return columns, column_vals, None
 
-    def deserialize(self, item):
+    def deserialize(self, item, force_bytes_to_unicode=False):
         index = self._index_from_records(item)
         column_fields = [x for x in item.dtype.names if x not in item.dtype.metadata['index']]
         multi_column = item.dtype.metadata.get('multi_column')
@@ -271,6 +272,37 @@ class DataFrameSerializer(PandasSerializer):
 
         if multi_column is not None:
             df.columns = MultiIndex.from_arrays(multi_column["values"], names=multi_column["names"])
+
+        if force_bytes_to_unicode:
+            # This is needed due to 'str' type in py2 when read back in py3 is 'bytes' which breaks the workflow
+            # of people migrating to py3. # https://github.com/manahl/arctic/issues/598
+            # This should not be used for a normal flow, and you should instead of writing unicode strings
+            # if you want to work with str in py3.,
+
+            for c in df.select_dtypes(object):
+                # The conversion is not using astype similar to the index as pandas has a bug where it tries to convert
+                # the data columns to a unicode string, and the object in this case would be bytes, eg. b'abc'
+                # which is converted to u"b'abc'" i.e it includes the b character as well! This generally happens
+                # when there is a str conversion without specifying the encoding. eg. str(b'abc') -> "b'abc'" and the
+                # fix for this is to tell it the encoding to use: i.e str(b'abc', 'utf-8') -> "abc"
+                if type(df[c].iloc[0]) == bytes:
+                    df[c] = df[c].str.decode('utf-8')
+
+            if isinstance(df.index, MultiIndex):
+                unicode_indexes = []
+                # MultiIndex requires a conversion at each level.
+                for level in range(len(df.index.levels)):
+                    _index = df.index.get_level_values(level)
+                    if isinstance(_index[0], bytes):
+                        _index = _index.astype('unicode')
+                    unicode_indexes.append(_index)
+                df.index = unicode_indexes
+            else:
+                if type(df.index[0]) == bytes:
+                    df.index = df.index.astype('unicode')
+
+            if not df.columns.empty and type(df.columns[0]) == bytes:
+                df.columns = df.columns.astype('unicode')
 
         return df
 

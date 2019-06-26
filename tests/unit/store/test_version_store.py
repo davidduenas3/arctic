@@ -1,20 +1,20 @@
-import bson
 import datetime
-import pytest
-import pymongo
-from bson import ObjectId
 from datetime import datetime as dt, timedelta as dtd
-from mock import patch, MagicMock, sentinel, create_autospec, Mock, call, ANY
-from pymongo import ReadPreference, read_preferences
-from pymongo.errors import OperationFailure, DuplicateKeyError
-from pymongo.collection import Collection
 
+import bson
+import pymongo
+import pytest
+from bson import ObjectId
+from mock import patch, MagicMock, sentinel, create_autospec, Mock, call
+from pymongo import ReadPreference
+from pymongo.collection import Collection
+from pymongo.errors import OperationFailure, DuplicateKeyError
+
+from arctic.arctic import ArcticLibraryBinding, Arctic
 from arctic.date import mktz
+from arctic.exceptions import DuplicateSnapshotException, NoDataFoundException
 from arctic.store import version_store
 from arctic.store.version_store import VersionStore, VersionedItem
-from arctic.arctic import ArcticLibraryBinding, Arctic
-from arctic.exceptions import ConcurrentModificationException, DuplicateSnapshotException, NoDataFoundException
-from arctic._config import FW_POINTERS_REFS_KEY
 
 
 def test_delete_version_version_not_found():
@@ -126,7 +126,7 @@ def test_read_as_of_LondonTime():
                      _versions=Mock(), _allow_secondary=False)
     VersionStore._read_metadata(vs, 'symbol', dt(2013, 4, 1, 9, 0))
     versions = vs._versions.with_options.return_value
-    versions.find_one.assert_called_once_with({'symbol':'symbol', '_id':
+    versions.find_one.assert_called_once_with({'symbol': 'symbol', '_id':
                                               {'$lt': bson.ObjectId.from_datetime(dt(2013, 4, 1, 9, 0, tzinfo=mktz()) + dtd(seconds=1))}},
                                              sort=[('symbol', pymongo.DESCENDING), ('version', pymongo.DESCENDING)])
 
@@ -137,7 +137,7 @@ def test_read_as_of_NotNaive():
                      _versions=Mock(), _allow_secondary=False)
     VersionStore._read_metadata(vs, 'symbol', dt(2013, 4, 1, 9, 0, tzinfo=mktz('Europe/Paris')))
     versions = vs._versions.with_options.return_value
-    versions.find_one.assert_called_once_with({'symbol':'symbol', '_id':
+    versions.find_one.assert_called_once_with({'symbol': 'symbol', '_id':
                                               {'$lt': bson.ObjectId.from_datetime(dt(2013, 4, 1, 9, 0, tzinfo=mktz('Europe/Paris')) + dtd(seconds=1))}},
                                              sort=[('symbol', pymongo.DESCENDING), ('version', pymongo.DESCENDING)])
 
@@ -156,11 +156,10 @@ def test_write_check_quota():
     write_handler = Mock(write=Mock(__name__=""))
     vs = create_autospec(VersionStore, instance=True,
                      _collection=Mock(),
-                     _version_nums=Mock(find_one_and_update=Mock(return_value={'version':1})),
-                     _versions=Mock(insert_one=lambda x:None),
+                     _version_nums=Mock(find_one_and_update=Mock(return_value={'version': 1})),
+                     _versions=Mock(insert_one=lambda x: None),
                      _arctic_lib=create_autospec(ArcticLibraryBinding,
-                                                 arctic=create_autospec(Arctic, mongo_host='some_host')),
-                     _publish_changes=False)
+                                                 arctic=create_autospec(Arctic, mongo_host='some_host')))
     vs._collection.database.connection.nodes = []
     vs._write_handler.return_value = write_handler
     VersionStore.write(vs, 'sym', sentinel.data, prune_previous_version=False)
@@ -367,7 +366,6 @@ def test_write_metadata_with_previous_data():
         assert expected_ret_val == VersionStore.write_metadata(vs, symbol=TEST_SYMBOL, metadata=META_TO_WRITE)
         assert vs._versions.insert_one.call_args_list == [call(expected_new_version)]
         assert vs._versions.delete_one.called is False
-        assert vs._publish_change.call_args_list == [call(TEST_SYMBOL, expected_new_version)]
         assert vs.write.called is False
 
 
@@ -393,7 +391,6 @@ def test_write_empty_metadata():
         assert expected_ret_val == VersionStore.write_metadata(vs, symbol=TEST_SYMBOL, metadata=None)
         assert vs._versions.insert_one.call_args_list == [call(expected_new_version)]
         assert vs._versions.delete_one.called is False
-        assert vs._publish_change.call_args_list == [call(TEST_SYMBOL, expected_new_version)]
         assert vs.write.called is False
 
 
@@ -404,7 +401,6 @@ def test_write_metadata_insert_version_dupkeyerror():
     VersionStore.write_metadata(vs, symbol=TEST_SYMBOL, metadata=META_TO_WRITE)
     assert vs._version_nums.find_one_and_update.call_count == 2
     assert vs._versions.insert_one.call_count == 2
-    assert vs._publish_change.call_count == 1
 
 
 def test_write_metadata_insert_version_opfailure():
@@ -414,7 +410,6 @@ def test_write_metadata_insert_version_opfailure():
     VersionStore.write_metadata(vs, symbol=TEST_SYMBOL, metadata=META_TO_WRITE)
     assert vs._version_nums.find_one_and_update.call_count == 1
     assert vs._versions.insert_one.call_count == 2
-    assert vs._publish_change.call_count == 1
 
 
 def test_restore_version():
@@ -455,7 +450,6 @@ def test_restore_version_data_missing_symbol():
                                          as_of=TPL_VERSION['version'], prune_previous_version=True)
     assert vs._read_metadata.call_args_list == [call(TEST_SYMBOL, as_of=TPL_VERSION['version'])]
     assert vs._versions.insert_one.called is False
-    assert vs._publish_change.called is False
 
 
 def test_restore_last_version():
@@ -488,8 +482,7 @@ def test_write_error_clean_retry():
                          _version_nums=Mock(find_one_and_update=Mock(return_value={'version': 1})),
                          _versions=Mock(insert_one=Mock(__name__="insert_one"), find_one=Mock(__name__="find_one")),
                          _arctic_lib=create_autospec(ArcticLibraryBinding,
-                                                     arctic=create_autospec(Arctic, mongo_host='some_host')),
-                         _publish_changes=False)
+                                                     arctic=create_autospec(Arctic, mongo_host='some_host')))
     vs._insert_version = lambda version: VersionStore._insert_version(vs, version)
     vs._collection.database.connection.nodes = []
     vs._write_handler.return_value = write_handler
@@ -498,7 +491,6 @@ def test_write_error_clean_retry():
     assert vs._versions.find_one.call_count == 2
     assert write_handler.write.call_count == 2
     assert vs._versions.insert_one.call_count == 1
-    assert vs._publish_change.call_count == 1
 
 
 def test_write_insert_version_duplicatekey():
@@ -508,8 +500,7 @@ def test_write_insert_version_duplicatekey():
                          _version_nums=Mock(find_one_and_update=Mock(return_value={'version': 1})),
                          _versions=Mock(insert_one=Mock(__name__="insert_one"), find_one=Mock(__name__="find_one")),
                          _arctic_lib=create_autospec(ArcticLibraryBinding,
-                                                     arctic=create_autospec(Arctic, mongo_host='some_host')),
-                         _publish_changes=False)
+                                                     arctic=create_autospec(Arctic, mongo_host='some_host')))
     vs._insert_version = lambda version: VersionStore._insert_version(vs, version)
     vs._versions.insert_one.side_effect = [DuplicateKeyError("dup key error"), None]
     vs._collection.database.connection.nodes = []
@@ -518,7 +509,6 @@ def test_write_insert_version_duplicatekey():
     assert vs._version_nums.find_one_and_update.call_count == 2
     assert vs._versions.find_one.call_count == 2
     assert write_handler.write.call_count == 2
-    assert vs._publish_change.call_count == 2
     assert vs._versions.insert_one.call_count == 2
 
 
@@ -529,8 +519,7 @@ def test_write_insert_version_operror():
                          _version_nums=Mock(find_one_and_update=Mock(return_value={'version': 1})),
                          _versions=Mock(insert_one=Mock(__name__="insert_one"), find_one=Mock(__name__="find_one")),
                          _arctic_lib=create_autospec(ArcticLibraryBinding,
-                                                     arctic=create_autospec(Arctic, mongo_host='some_host')),
-                         _publish_changes=False)
+                                                     arctic=create_autospec(Arctic, mongo_host='some_host')))
     vs._insert_version = lambda version: VersionStore._insert_version(vs, version)
     vs._versions.insert_one.side_effect = [OperationFailure("mongo op error"), None]
     vs._collection.database.connection.nodes = []
@@ -540,7 +529,6 @@ def test_write_insert_version_operror():
     assert vs._versions.find_one.call_count == 1
     assert write_handler.write.call_count == 1
     assert vs._versions.insert_one.call_count == 2
-    assert vs._publish_change.call_count == 1
 
 
 def test_append_error_clean_retry():
@@ -553,8 +541,7 @@ def test_append_error_clean_retry():
                          _version_nums=Mock(find_one_and_update=Mock(return_value={'version': previous_version['version']+1})),
                          _versions=Mock(insert_one=Mock(__name__="insert_one"), find_one=Mock(__name__="find_one", return_value=previous_version)),
                          _arctic_lib=create_autospec(ArcticLibraryBinding,
-                                                     arctic=create_autospec(Arctic, mongo_host='some_host')),
-                         _publish_changes=False)
+                                                     arctic=create_autospec(Arctic, mongo_host='some_host')))
     vs._insert_version = lambda version: VersionStore._insert_version(vs, version)
     vs._collection.database.connection.nodes = []
     vs._read_handler.return_value = read_handler
@@ -563,7 +550,6 @@ def test_append_error_clean_retry():
     assert vs._versions.find_one.call_count == 2
     assert read_handler.append.call_count == 2
     assert vs._versions.insert_one.call_count == 1
-    assert vs._publish_change.call_count == 1
 
 
 def test_append_insert_version_duplicatekey():
@@ -575,8 +561,7 @@ def test_append_insert_version_duplicatekey():
                          _version_nums=Mock(find_one_and_update=Mock(return_value={'version': previous_version['version']+1})),
                          _versions=Mock(insert_one=Mock(__name__="insert_one"), find_one=Mock(__name__="find_one", return_value=previous_version)),
                          _arctic_lib=create_autospec(ArcticLibraryBinding,
-                                                     arctic=create_autospec(Arctic, mongo_host='some_host')),
-                         _publish_changes=False)
+                                                     arctic=create_autospec(Arctic, mongo_host='some_host')))
     vs._insert_version = lambda version: VersionStore._insert_version(vs, version)
     vs._versions.insert_one.side_effect = [DuplicateKeyError("dup key error"), None]
     vs._collection.database.connection.nodes = []
@@ -586,7 +571,6 @@ def test_append_insert_version_duplicatekey():
     assert vs._versions.find_one.call_count == 2
     assert read_handler.append.call_count == 2
     assert vs._versions.insert_one.call_count == 2
-    assert vs._publish_change.call_count == 2
 
 def test_append_insert_version_operror():
     read_handler = Mock(append=Mock(__name__=""))
@@ -597,8 +581,7 @@ def test_append_insert_version_operror():
                          _version_nums=Mock(find_one_and_update=Mock(return_value={'version': previous_version['version']+1})),
                          _versions=Mock(insert_one=Mock(__name__="insert_one"), find_one=Mock(__name__="find_one", return_value=previous_version)),
                          _arctic_lib=create_autospec(ArcticLibraryBinding,
-                                                     arctic=create_autospec(Arctic, mongo_host='some_host')),
-                         _publish_changes=False)
+                                                     arctic=create_autospec(Arctic, mongo_host='some_host')))
     vs._insert_version = lambda version: VersionStore._insert_version(vs, version)
     vs._versions.insert_one.side_effect = [OperationFailure("mongo op error"), None]
     vs._collection.database.connection.nodes = []
@@ -608,4 +591,3 @@ def test_append_insert_version_operror():
     assert vs._versions.find_one.call_count == 1
     assert read_handler.append.call_count == 1
     assert vs._versions.insert_one.call_count == 2
-    assert vs._publish_change.call_count == 1

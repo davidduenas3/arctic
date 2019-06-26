@@ -1,23 +1,20 @@
-import logging
-import pymongo
 import hashlib
-import bson
+import logging
 from collections import defaultdict
+from itertools import groupby
 
+import pymongo
 from bson.binary import Binary
 from pandas import DataFrame, Series
-from six.moves import xrange
-from itertools import groupby
 from pymongo.errors import OperationFailure
+from six.moves import xrange
 
-from ..decorators import mongo_retry
-from .._util import indent, mongo_count, enable_sharding
-from ..serialization.numpy_arrays import FrametoArraySerializer, DATA, METADATA, COLUMNS
 from .date_chunker import DateChunker, START, END
 from .passthrough_chunker import PassthroughChunker
-
+from .._util import indent, mongo_count, enable_sharding
+from ..decorators import mongo_retry
 from ..exceptions import NoDataFoundException
-
+from ..serialization.numpy_arrays import FrametoArraySerializer, DATA, METADATA, COLUMNS
 
 logger = logging.getLogger(__name__)
 
@@ -87,14 +84,6 @@ class ChunkStore(object):
         # Do we allow reading from secondaries
         self._allow_secondary = self._arctic_lib.arctic._allow_secondary
         self._reset()
-        self._check_invalid_segment()
-
-    def _check_invalid_segment(self):
-        # Issue 442
-        # for legacy data that was incorectly marked with segment start of -1
-        for symbol in self.list_symbols():
-            if mongo_count(self._collection, filter={SYMBOL: symbol, SEGMENT: -1}) > 1:
-                logger.warning("Symbol %s has malformed segments. Data must be rewritten or fixed with chunkstore segment_id_repair tool" % symbol)
 
     @mongo_retry
     def _reset(self):
@@ -236,7 +225,6 @@ class ChunkStore(object):
             audit['old_symbol'] = from_symbol
             self._audit.insert_one(audit)
 
-
     def read(self, symbol, chunk_range=None, filter_data=True, **kwargs):
         """
         Reads data for a given symbol from the database.
@@ -267,7 +255,6 @@ class ChunkStore(object):
         if not sym:
             raise NoDataFoundException('No data found for %s' % (symbol))
 
-
         spec = {SYMBOL: {'$in': symbol}}
         chunker = CHUNKER_MAP[sym[0][CHUNKER]]
         deser = SER_MAP[sym[0][SERIALIZER]].deserialize
@@ -291,7 +278,6 @@ class ChunkStore(object):
             # otherwise, take all segments and reassemble the data to one chunk
             chunk_data = b''.join([doc[DATA] for doc in segments])
             chunks[segments[0][SYMBOL]].append({DATA: chunk_data, METADATA: mdata})
-
 
         skip_filter = not filter_data or chunk_range is None
 
@@ -473,7 +459,6 @@ class ChunkStore(object):
                                               END: end,
                                               SEGMENT: {'$gte': chunk_count}})
 
-
             for i in xrange(chunk_count):
                 chunk = {DATA: Binary(data[DATA][i * MAX_CHUNK_SIZE: (i + 1) * MAX_CHUNK_SIZE])}
                 chunk[SEGMENT] = i
@@ -601,9 +586,9 @@ class ChunkStore(object):
         ret['chunk_count'] = sym[CHUNK_COUNT]
         ret['len'] = sym[LEN]
         ret['appended_rows'] = sym[APPEND_COUNT]
-        ret['metadata'] = sym[METADATA]
+        ret['metadata'] = sym[METADATA] if METADATA in sym else None
         ret['chunker'] = sym[CHUNKER]
-        ret['chunk_size'] = sym[CHUNK_SIZE]
+        ret['chunk_size'] = sym[CHUNK_SIZE] if CHUNK_SIZE in sym else 0
         ret['serializer'] = sym[SERIALIZER]
         return ret
 
@@ -749,13 +734,14 @@ class ChunkStore(object):
         res['chunks'] = db.command('collstats', self._collection.name)
         res['symbols'] = db.command('collstats', self._symbols.name)
         res['metadata'] = db.command('collstats', self._mdata.name)
-        res['totals'] = {'count': res['chunks']['count'],
-                         'size': res['chunks']['size'] + res['symbols']['size'] + res['metadata']['size'],
-                        }
+        res['totals'] = {
+            'count': res['chunks']['count'],
+            'size': res['chunks']['size'] + res['symbols']['size'] + res['metadata']['size'],
+        }
         return res
 
     def has_symbol(self, symbol):
-        '''
+        """
         Check if symbol exists in collection
 
         Parameters
@@ -766,5 +752,5 @@ class ChunkStore(object):
         Returns
         -------
         bool
-        '''
+        """
         return self._get_symbol_info(symbol) is not None

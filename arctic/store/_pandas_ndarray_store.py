@@ -1,17 +1,17 @@
 import ast
 import logging
 
-from arctic._util import NP_OBJECT_DTYPE
+import numpy as np
 from bson.binary import Binary
 from pandas import DataFrame, Series, Panel
-import numpy as np
 
+from arctic._util import NP_OBJECT_DTYPE
 from arctic.serialization.numpy_records import SeriesSerializer, DataFrameSerializer
+from ._ndarray_store import NdarrayStore
 from .._compression import compress, decompress
+from .._config import FORCE_BYTES_TO_UNICODE
 from ..date._util import to_pandas_closed_closed
 from ..exceptions import ArcticException
-from ._ndarray_store import NdarrayStore
-
 
 log = logging.getLogger(__name__)
 
@@ -47,9 +47,7 @@ class PandasStore(NdarrayStore):
             new_segments = np.array(new_segments, dtype='i8')
             last_rows = recarr[new_segments - start]
             # create numpy index
-            index = np.core.records.fromarrays([last_rows[idx_col]]
-                                               + [new_segments, ],
-                                               dtype=INDEX_DTYPE)
+            index = np.core.records.fromarrays([last_rows[idx_col]] + [new_segments, ], dtype=INDEX_DTYPE)
             # append to existing index if exists
             if existing_index:
                 # existing_index_arr is read-only but it's never written to
@@ -200,7 +198,9 @@ class PandasDataFrameStore(PandasStore):
 
     def read(self, arctic_lib, version, symbol, **kwargs):
         item = super(PandasDataFrameStore, self).read(arctic_lib, version, symbol, **kwargs)
-        return self.SERIALIZER.deserialize(item)
+        # Try to check if force_bytes_to_unicode is set in kwargs else use the config value (which defaults to False)
+        force_bytes_to_unicode = kwargs.get('force_bytes_to_unicode', FORCE_BYTES_TO_UNICODE)
+        return self.SERIALIZER.deserialize(item, force_bytes_to_unicode=force_bytes_to_unicode)
 
     def read_options(self):
         return super(PandasDataFrameStore, self).read_options()

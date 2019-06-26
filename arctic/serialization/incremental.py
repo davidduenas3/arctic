@@ -11,9 +11,8 @@ from arctic._config import ARCTIC_AUTO_EXPAND_CHUNK_SIZE
 from arctic.serialization.numpy_records import PandasSerializer
 from .._compression import compress
 from .._config import MAX_DOCUMENT_SIZE
-from ..exceptions import ArcticSerializationException
 from .._util import NP_OBJECT_DTYPE
-
+from ..exceptions import ArcticSerializationException
 
 ABC = abc.ABCMeta('ABC', (object,), {})
 
@@ -85,7 +84,7 @@ class IncrementalPandasToRecArraySerializer(LazyIncrementalSerializer):
         max_str_len = len(max(self.input_data[fname].astype(type_sym), key=len))
         str_field_dtype = np.dtype('{}{:d}'.format(type_sym, max_str_len)) if max_str_len > 0 else input_ndtype
         return str_field_dtype, True
-    
+
     def _get_dtype(self):
         # Serializer is being called only if can_convert_to_records_without_objects() has passed,
         # which means that the resulting recarray does not contain objects but only numpy types, string, or unicode
@@ -149,11 +148,11 @@ class IncrementalPandasToRecArraySerializer(LazyIncrementalSerializer):
         sze = sze if sze < max_chunk_size else max_chunk_size
         rows_per_chunk = int(max_chunk_size / sze)
         if rows_per_chunk < 1 and ARCTIC_AUTO_EXPAND_CHUNK_SIZE:
-                # If a row size is larger than chunk_size, use the maximum document size
-                logging.warning('Chunk size of {} is too small to fit a row ({}). '
-                                'Using maximum document size.'.format(max_chunk_size, MAX_DOCUMENT_SIZE))
-                # For huge rows, fall-back to using a very large document size, less than max-allowed by MongoDB
-                rows_per_chunk = int(MAX_DOCUMENT_SIZE / sze)
+            # If a row size is larger than chunk_size, use the maximum document size
+            logging.warning('Chunk size of {} is too small to fit a row ({}). '
+                            'Using maximum document size.'.format(max_chunk_size, MAX_DOCUMENT_SIZE))
+            # For huge rows, fall-back to using a very large document size, less than max-allowed by MongoDB
+            rows_per_chunk = int(MAX_DOCUMENT_SIZE / sze)
         if rows_per_chunk < 1:
             raise ArcticSerializationException("Serialization failed to split data into max sized chunks.")
         return rows_per_chunk
@@ -197,23 +196,23 @@ class IncrementalPandasToRecArraySerializer(LazyIncrementalSerializer):
         # Note that the range is: [from_idx, to_idx)
         self._lazy_init()
 
-        my_lenth = len(self)
+        my_length = len(self)
 
         # Take into account default arguments and negative indexing (from end offset)
         from_idx = 0 if from_idx is None else from_idx
         if from_idx < 0:
-            from_idx = my_lenth + from_idx
-        to_idx = my_lenth if to_idx is None else min(to_idx, my_lenth)
+            from_idx = my_length + from_idx
+        to_idx = my_length if to_idx is None else min(to_idx, my_length)
         if to_idx < 0:
-            to_idx = my_lenth + to_idx
+            to_idx = my_length + to_idx
 
         # No data, finish iteration
-        if my_lenth == 0 or from_idx >= my_lenth or from_idx >= to_idx:
+        if my_length == 0 or from_idx >= my_length or from_idx >= to_idx:
             return
 
         # Perform serialization for each chunk
         while from_idx < to_idx:
-            curr_stop = min(from_idx+self._rows_per_chunk, to_idx)
+            curr_stop = min(from_idx + self._rows_per_chunk, to_idx)
 
             chunk, _ = self._serializer.serialize(
                 self.input_data[from_idx: curr_stop],

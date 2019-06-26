@@ -1,13 +1,13 @@
-import pytest
 import time
 from datetime import datetime as dt
+
+import pytest
 from mock import patch, MagicMock
 from pandas.util.testing import assert_frame_equal
 from pymongo.errors import OperationFailure
 
 from arctic.arctic import Arctic, VERSION_STORE
 from arctic.exceptions import LibraryNotFoundException, QuotaExceededException
-
 from ..util import get_large_ts
 
 
@@ -233,3 +233,111 @@ def test_library_exists_no_auth(arctic):
         assert arctic.library_exists('test')
         assert AB.return_value.get_library_type.called
         assert not arctic.library_exists('nonexistentlib')
+
+
+def test_list_libraries_cached(arctic):
+    # default in arctic is to cache list_libraries.
+    libs = ['test1', 'test2']
+    for lib in libs:
+        arctic.initialize_library(lib)
+
+    # Cached data should have been appended to cache.
+    assert sorted(libs) == sorted(arctic.list_libraries()) == sorted(arctic._list_libraries())
+
+    # Should default to uncached list_libraries if cache is empty.
+    with patch('arctic.arctic.Arctic._list_libraries', return_value=libs) as uncached_list_libraries:
+        # Empty cache manually.
+        arctic._conn.meta_db.cache.remove({})
+        assert arctic._list_libraries_cached() == libs
+        uncached_list_libraries.assert_called()
+
+    # Reload cache and check that it has data
+    arctic.reload_cache()
+    assert sorted(arctic._cache.get('list_libraries')) == sorted(libs)
+
+    # Should fetch it from cache the second time.
+    with patch('arctic.arctic.Arctic._list_libraries', return_value=libs) as uncached_list_libraries:
+        assert arctic._list_libraries_cached() == libs
+        uncached_list_libraries.assert_not_called()
+
+
+def test_initialize_library_adds_to_cache(arctic):
+    libs = ['test1', 'test2']
+
+    for lib in libs:
+        arctic.initialize_library(lib)
+
+    arctic.reload_cache()
+    assert arctic._list_libraries_cached() == arctic._list_libraries()
+
+    # Add another lib
+    arctic.initialize_library('test3')
+
+    assert sorted(arctic._cache.get('list_libraries')) == ['test1', 'test2', 'test3']
+
+
+def test_cache_does_not_return_stale_data(arctic):
+    libs = ['test1', 'test2']
+
+    for lib in libs:
+        arctic.initialize_library(lib)
+
+    arctic.reload_cache()
+    assert arctic._list_libraries_cached() == arctic._list_libraries()
+
+    time.sleep(0.2)
+
+    # Should call uncached list_libraries if the data is stale according to caller.
+    with patch('arctic.arctic.Arctic._list_libraries', return_value=libs) as uncached_list_libraries:
+        assert arctic._list_libraries_cached(newer_than_secs=0.1) == libs
+        uncached_list_libraries.assert_called()
+
+
+def test_renaming_returns_new_name_in_cache(arctic):
+    libs = ['test1', 'test2']
+
+    for lib in libs:
+        arctic.initialize_library(lib)
+
+    assert arctic._list_libraries_cached() == arctic._list_libraries()
+
+    arctic.rename_library('test1', 'test3')
+
+    assert sorted(arctic._list_libraries_cached()) == sorted(['test2', 'test3'])
+
+
+def test_deleting_library_removes_it_from_cache(arctic):
+    libs = ['test1', 'test2']
+
+    for lib in libs:
+        arctic.initialize_library(lib)
+
+    arctic.delete_library('test1')
+
+    assert arctic._list_libraries_cached() == arctic._list_libraries() == arctic.list_libraries() == ['test2']
+
+
+def test_disable_cache_by_settings(arctic):
+    lib = 'test1'
+    arctic.initialize_library(lib)
+
+    # Should be enabled by default
+    assert arctic._list_libraries_cached() == arctic._list_libraries()
+
+    arctic._cache.set_caching_state(enabled=False)
+
+    # Should not return cached results now.
+    with patch('arctic.arctic.Arctic._list_libraries', return_value=[lib]) as uncached_list_libraries:
+        with patch('arctic.arctic.Arctic._list_libraries_cached', return_value=[lib]) as cached_list_libraries:
+            arctic.list_libraries()
+            uncached_list_libraries.assert_called()
+            cached_list_libraries.assert_not_called()
+
+    arctic._cache.set_caching_state(enabled=True)
+
+    # Should used cached data again.
+    with patch('arctic.arctic.Arctic._list_libraries', return_value=[lib]) as uncached_list_libraries_e:
+        with patch('arctic.arctic.Arctic._list_libraries_cached', return_value=[lib]) as cached_list_libraries_e:
+            arctic.list_libraries()
+            uncached_list_libraries_e.assert_not_called()
+            cached_list_libraries_e.assert_called()
