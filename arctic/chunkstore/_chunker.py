@@ -4,6 +4,8 @@ END = 'e'
 
 class Chunker(object):
 
+    __slots__=()
+
     def to_chunks(self, data, **kwargs):
         """
         Chunks data. keyword args passed in from write API

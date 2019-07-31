@@ -10,7 +10,7 @@ from pymongo.errors import OperationFailure
 from six.moves import xrange
 
 from .date_chunker import DateChunker, START, END
-from .passthrough_chunker import PassthroughChunker
+from .passthrough_chunker import PassthroughChunker, Chunker
 from .._util import indent, mongo_count, enable_sharding
 from ..decorators import mongo_retry
 from ..exceptions import NoDataFoundException
@@ -34,8 +34,17 @@ MAX_CHUNK_SIZE = 15 * 1024 * 1024
 
 SER_MAP = {FrametoArraySerializer.TYPE: FrametoArraySerializer()}
 
-CHUNKER_MAP = {DateChunker.TYPE: DateChunker(),
-               PassthroughChunker.TYPE: PassthroughChunker()}
+CHUNKER_MAP = {}
+
+def register_chunker(chunker_class, arg=(), kwarg={}):
+    assert issubclass(chunker_class, Chunker)
+    chunker=chunker_class(*arg, **kwarg)
+    CHUNKER_MAP[chunker.TYPE]=chunker
+    return chunker
+
+
+register_chunker(DateChunker)
+register_chunker(PassthroughChunker)
 
 
 class ChunkStore(object):
