@@ -32,11 +32,18 @@ USERMETA = 'u'
 
 MAX_CHUNK_SIZE = 15 * 1024 * 1024
 
-SER_MAP = {FrametoArraySerializer.TYPE: FrametoArraySerializer()}
+SER_MAP = {}
 
 CHUNKER_MAP = {}
 
-def register_chunker(chunker_class, arg=(), kwarg={}):
+def register_serializer(serializer_class):
+    serializer = serializer_class()
+    SER_MAP[serializer.TYPE] = serializer
+    return serializer
+
+register_serializer(FrametoArraySerializer)
+
+def register_chunker(chunker_class, *arg, **kwarg):
     assert issubclass(chunker_class, Chunker)
     chunker=chunker_class(*arg, **kwarg)
     CHUNKER_MAP[chunker.TYPE]=chunker
