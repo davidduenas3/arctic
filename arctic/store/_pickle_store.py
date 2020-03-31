@@ -11,12 +11,14 @@ from six.moves import cPickle, xrange
 from ._version_store_utils import checksum, pickle_compat_load, version_base_or_id
 from .._compression import decompress, compress_array
 from ..exceptions import UnsupportedPickleStoreVersion
+from .._config import SKIP_BSON_ENCODE_PICKLE_STORE, MAX_BSON_ENCODE
+
 
 # new versions of chunked pickled objects MUST begin with __chunked__
 _MAGIC_CHUNKED = '__chunked__'
 _MAGIC_CHUNKEDV2 = '__chunked__V2'
 _CHUNK_SIZE = 15 * 1024 * 1024  # 15MB
-_MAX_BSON_ENCODE = 256 * 1024  # 256K - don't fill up the version document with encoded bson
+_HARD_MAX_BSON_ENCODE = 10 * 1024 * 1024  # 10MB
 
 logger = logging.getLogger(__name__)
 
@@ -75,15 +77,19 @@ class PickleStore(object):
     def read_options():
         return []
 
-    def write(self, arctic_lib, version, symbol, item, previous_version):
-        try:
-            # If it's encodeable, then ship it
-            b = bson.BSON.encode({'data': item})
-            if len(b) < _MAX_BSON_ENCODE:
-                version['data'] = item
-                return
-        except InvalidDocument:
-            pass
+    def write(self, arctic_lib, version, symbol, item, _previous_version):
+        # Currently we try to bson encode if the data is less than a given size and store it in
+        # the version collection, but pickling might be preferable if we have characters that don't
+        # play well with the bson encoder or if you always want your data in the data collection.
+        if not SKIP_BSON_ENCODE_PICKLE_STORE:
+            try:
+                # If it's encodeable, then ship it
+                b = bson.BSON.encode({'data': item})
+                if len(b) < min(MAX_BSON_ENCODE, _HARD_MAX_BSON_ENCODE):
+                    version['data'] = item
+                    return
+            except InvalidDocument:
+                pass
 
         # Pickle, chunk and store the data
         collection = arctic_lib.get_top_level_collection()
