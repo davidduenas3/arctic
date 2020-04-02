@@ -1,6 +1,6 @@
 import pandas as pd
 
-from arctic.date import DateRange, to_pandas_closed_closed
+from ..date import DateRange, to_pandas_closed_closed
 from ._chunker import Chunker, START, END
 
 
