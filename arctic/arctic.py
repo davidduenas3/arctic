@@ -648,3 +648,10 @@ class ArcticLibraryBinding(object):
     def set_library_metadata(self, field, value):
         self._library_coll[self.arctic.METADATA_COLL].update_one({'_id': self.arctic.METADATA_DOC_ID},
                                                                  {'$set': {field: value}}, upsert=True)
+    @mongo_retry
+    def library_metadata_keys(self):
+        lib_metadata = self._library_coll[self.arctic.METADATA_COLL].find_one({"_id": self.arctic.METADATA_DOC_ID})
+        if lib_metadata is not None:
+            return lib_metadata.keys()
+        else:
+            return ()

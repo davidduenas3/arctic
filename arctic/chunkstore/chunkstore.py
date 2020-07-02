@@ -9,7 +9,7 @@ from pandas import DataFrame, Series
 from pymongo.errors import OperationFailure
 from six.moves import xrange
 
-from .date_chunker import DateChunker, START, END
+from .date_chunker import DateChunker, START, END, Chunker
 from .passthrough_chunker import PassthroughChunker
 from .._util import indent, mongo_count, enable_sharding
 from ..decorators import mongo_retry
@@ -37,6 +37,22 @@ SER_MAP = {FrametoArraySerializer.TYPE: FrametoArraySerializer()}
 CHUNKER_MAP = {DateChunker.TYPE: DateChunker(),
                PassthroughChunker.TYPE: PassthroughChunker()}
 
+def register_chunker(chunker):
+    """
+    Register a chunker
+    """
+    if not isinstance(chunker,Chunker):
+        raise TypeError("chunker %s should be a Chunker instance" % chunker)
+    
+    name = chunker.TYPE
+    if name in CHUNKER_MAP:
+        raise ArcticException("chunker %s already registered as %s" % (name, CHUNKER_MAP[name]))
+    
+    CHUNKER_MAP[name] = chunker
+    return chunker
+    
+def get_chunker(name):
+    return CHUNKER_MAP[name]
 
 class ChunkStore(object):
     @classmethod
