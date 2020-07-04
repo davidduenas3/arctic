@@ -4,6 +4,13 @@ from enum import Enum
 class Intervals(Enum):
     (OPEN_CLOSED, CLOSED_OPEN, OPEN_OPEN, CLOSED_CLOSED) = range(1101, 1105)
 
+    @classmethod
+    def _missing_(cls, value):
+        try:
+            return dict(zip(('right', 'left', 'neither', 'both'), cls))[value]
+        except:
+            pass
+        return super()._missing_(value)
 
 (OPEN_CLOSED, CLOSED_OPEN, OPEN_OPEN, CLOSED_CLOSED) = INTERVALS = Intervals.__members__.values()
 
@@ -30,7 +37,7 @@ class GeneralSlice(object):
         self.start = start
         self.end = end
         self.step = step
-        self.interval = interval
+        self.interval = Intervals(interval)
 
     @property
     def startopen(self):

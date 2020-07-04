@@ -246,3 +246,10 @@ def test_intersection_contains():
 
     assert all(equal_contains(start, dr1, dr2) for dr1 in date_ranges for dr2 in date_ranges)
     assert all(equal_contains(end, dr1, dr2) for dr1 in date_ranges for dr2 in date_ranges)
+
+def test_intervals_missing():
+
+    assert DateRange('20110101', '20110102', 'both').interval is CLOSED_CLOSED
+    assert DateRange('20110101', '20110102', 'left').interval is CLOSED_OPEN
+    assert DateRange('20110101', '20110102', 'right').interval is OPEN_CLOSED
+    assert DateRange('20110101', '20110102', 'neither').interval is OPEN_OPEN
