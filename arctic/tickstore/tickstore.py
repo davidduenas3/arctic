@@ -805,3 +805,19 @@ class TickStore(object):
         if res is None:
             raise NoDataFoundException("No Data found for {}".format(symbol))
         return utc_dt_to_local_dt(res[START])
+    
+    def has_symbol(self, symbol):
+        """
+        Check if symbol exists in collection
+
+        Parameters
+        ----------
+        symbol: str
+            The symbol to look up in the collection
+
+        Returns
+        -------
+        bool
+        """
+        return self._collection.find_one(self._symbol_query(symbol)) is not None
+
