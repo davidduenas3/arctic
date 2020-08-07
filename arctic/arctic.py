@@ -649,6 +649,10 @@ class ArcticLibraryBinding(object):
         self._library_coll[self.arctic.METADATA_COLL].update_one({'_id': self.arctic.METADATA_DOC_ID},
                                                                  {'$set': {field: value}}, upsert=True)
     @mongo_retry
+    def delete_library_metadata(self, field):
+        self._library_coll[self.arctic.METADATA_COLL].update_one({'_id': self.arctic.METADATA_DOC_ID},
+                                                                 {'$unset': {field: None}})
+    @mongo_retry
     def library_metadata_keys(self):
         lib_metadata = self._library_coll[self.arctic.METADATA_COLL].find_one({"_id": self.arctic.METADATA_DOC_ID})
         if lib_metadata is not None:

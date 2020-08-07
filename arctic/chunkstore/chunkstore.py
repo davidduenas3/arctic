@@ -13,7 +13,7 @@ from .date_chunker import DateChunker, START, END, Chunker
 from .passthrough_chunker import PassthroughChunker
 from .._util import indent, mongo_count, enable_sharding
 from ..decorators import mongo_retry
-from ..exceptions import NoDataFoundException
+from ..exceptions import NoDataFoundException,ArcticException
 from ..serialization.numpy_arrays import FrametoArraySerializer, DATA, METADATA, COLUMNS
 
 logger = logging.getLogger(__name__)
